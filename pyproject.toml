@@ -8,4 +8,5 @@ dependencies = [
     "fastapi>=0.128.0",
     "pytelegrambotapi>=4.30.0",
     "sqlalchemy>=2.0.45",
+    "uvicorn>=0.40.0",
 ]
