@@ -34,9 +34,9 @@ Current focus: **API routes and core CRUD workflow before scheduler or bot autom
 Primary goal is to expose complete HTTP routes before background jobs.
 
 - [ ] Create router structure  
-  - users  
-  - monitors  
-  - checks  
+  -[x] users  
+  -[ ] monitors  
+  -[ ] checks  
 - [ ] Implement request schemas with Pydantic  
 - [ ] Add input validation  
 - [ ] Implement ownership verification  
@@ -45,8 +45,8 @@ Primary goal is to expose complete HTTP routes before background jobs.
 
 #### Required Endpoints
 
-- [ ] POST /users  
-- [ ] GET /users/me  
+- [x] POST /users/create  
+- [x] GET /users/me  
 
 - [ ] POST /monitors  
 - [ ] GET /monitors  
