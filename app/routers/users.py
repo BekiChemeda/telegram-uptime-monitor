@@ -50,11 +50,13 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         user_data["joined_at"] = user.created_at
 
     new_user = User(**user_data)
-    
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-    return new_user
+    try:
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+        return new_user
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
 
 # This endpoint updates user's username
 @router.put("/update", response_model=UserResponse)
