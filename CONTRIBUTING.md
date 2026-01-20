@@ -3,6 +3,7 @@
 ## Project Goal
 
 Build a reliable uptime monitoring system that:
+
 - checks websites and APIs periodically  
 - detects outages and recoveries  
 - stores history in PostgreSQL  
@@ -10,43 +11,95 @@ Build a reliable uptime monitoring system that:
 
 ---
 
+## Development Priorities
+
+Current focus: **API routes and core CRUD workflow before scheduler or bot automation.**
+
+---
+
 ## Development Setup Tasks
 
 ### 1. Environment
 
-- [ ] Install PostgreSQL Server  
-- [ ] Create local database  
-- [ ] Configure .env file  
-- [ ] Install Python dependencies  
-- [ ] Verify FastAPI startup  
+- [x] Install PostgreSQL Server  
+- [x] Create local database  
+- [x] Configure .env file  
+- [x] Install Python dependencies  
+- [x] Verify FastAPI startup  
 
-### 2. Database Layer
+---
 
-- [ ] Design SQLAlchemy models  
-- [ ] Create Alembic migrations  
-- [ ] Implement repositories for  
+### 2. API Layer First
+
+Primary goal is to expose complete HTTP routes before background jobs.
+
+- [ ] Create router structure  
   - users  
   - monitors  
   - checks  
-  - incidents  
+- [ ] Implement request schemas with Pydantic  
+- [ ] Add input validation  
+- [ ] Implement ownership verification  
+- [ ] Standardize error responses  
+- [ ] Add pagination for lists  
 
-### 3. Monitoring Core
+#### Required Endpoints
 
-- [ ] Implement HTTP checker  
+- [ ] POST /users  
+- [ ] GET /users/me  
+
+- [ ] POST /monitors  
+- [ ] GET /monitors  
+- [ ] GET /monitors/{id}  
+- [ ] PATCH /monitors/{id}  
+- [ ] DELETE /monitors/{id}  
+
+- [ ] GET /monitors/{id}/checks  
+- [ ] GET /monitors/{id}/stats  
+
+---
+
+### 3. Database Layer
+
+Routes depend on stable data access.
+
+- [ ] Finalize SQLAlchemy models  
+- [ ] Create Alembic migrations  
+- [ ] Implement repository pattern  
+  - user repository  
+  - monitor repository  
+  - check repository  
+  - incident repository  
+- [ ] Add transactions and session handling  
+
+---
+
+### 4. Monitoring Core
+
+After routes work manually.
+
+- [ ] Implement HTTP checker service  
 - [ ] Measure response time  
 - [ ] Validate status codes  
 - [ ] Save check results  
-- [ ] Detect state changes  
+- [ ] Detect up or down transitions  
+- [ ] Create incident records  
 
-### 4. Scheduler
+---
+
+### 5. Scheduler
 
 - [ ] Configure APScheduler  
 - [ ] Load active monitors  
 - [ ] Prevent overlapping jobs  
-- [ ] Add timeouts  
+- [ ] Add timeout handling  
+- [ ] Retry strategy  
 
-### 5. Telegram Bot
+---
 
+### 6. Telegram Bot Integration
+
+- [ ] Connect bot with API layer  
 - [ ] Implement commands  
   - /start  
   - /add  
@@ -54,32 +107,35 @@ Build a reliable uptime monitoring system that:
   - /delete  
   - /stats  
 - [ ] Format alert messages  
-- [ ] Rate limiting  
+- [ ] Add rate limiting  
 
-### 6. API Layer
-
-- [ ] CRUD endpoints  
-- [ ] Input validation  
-- [ ] User ownership checks  
+---
 
 ### 7. Security
 
 - [ ] URL validation  
 - [ ] SSRF protection  
-- [ ] logging  
-- [ ] error handling  
+- [ ] request timeouts  
+- [ ] structured logging  
+- [ ] exception handling  
+
+---
 
 ### 8. Testing
 
-- [ ] unit tests  
-- [ ] integration tests  
-- [ ] failure simulation  
+- [ ] unit tests for routes  
+- [ ] repository tests  
+- [ ] checker tests  
+- [ ] failure simulations  
+
+---
 
 ### 9. Deployment
 
 - [ ] Dockerfile  
 - [ ] docker-compose  
-- [ ] production config  
+- [ ] production configuration  
+- [ ] health checks  
 
 ---
 
@@ -87,7 +143,7 @@ Build a reliable uptime monitoring system that:
 
 1. Fork repository  
 2. Create feature branch  
-3. Write tests  
+3. Implement routes with tests first  
 4. Follow commit style  
 5. Open pull request  
 
@@ -95,8 +151,10 @@ Build a reliable uptime monitoring system that:
 
 ## Coding Rules
 
+- Build routes before background logic  
 - Use async where possible  
 - Write type hints  
 - Keep functions small  
 - No hardcoded secrets  
 - Follow FastAPI structure  
+- Repositories must be independent of bot  
