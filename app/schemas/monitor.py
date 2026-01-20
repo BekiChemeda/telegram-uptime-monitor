@@ -1,22 +1,47 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl, field_validator
 from datetime import datetime
 from uuid import UUID
+from typing import Optional
+import re
 
 class MonitorBase(BaseModel):
-    url: str
+    url: HttpUrl
     name: str
-    interval_seconds: int = 60
-    timeout_seconds: int = 10
-    expected_status: int = 200
-    is_active: bool = True
+    interval_seconds:  Optional[int] = 60
+    timeout_seconds: Optional[int] = 10
+    expected_status: Optional[int] = 200
+    is_active: Optional[bool] = True
+
+    @field_validator('url', mode='before')
+    @classmethod
+    def validate_url(cls, v):
+        if isinstance(v, str):
+            # Strip whitespace
+            v = v.strip()
+            # If empty string, let Pydantic handle the error or not (depending on Optional)
+            if not v:
+                return v
+            if not v.startswith(('http://', 'https://')):
+                # Check if it looks like a domain (e.g., "example.com" or "example.com/foo")
+                # We basically look for at least one dot in the beginning part before any slash
+                # or verify it's localhost
+                domain_regex = r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?::\d+)?(?:/.*)?$'
+                # Also allow simple IP addresses
+                ip_regex = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?(?:/.*)?$'
+                
+                if re.match(domain_regex, v) or re.match(ip_regex, v) or v.startswith("localhost"):
+                   return f"https://{v}"
+        return v
 
 class MonitorCreate(MonitorBase):
-    pass
+    telegram_id: int
+    
 class MonitorResponse(MonitorBase):
     id: UUID
     owner_id: UUID
+    url: HttpUrl
     created_at: datetime
-    last_checked: datetime | None
+    last_checked: Optional[datetime] = None
 
     class Config:
         from_attributes = True
