@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.database.init_db import init_db
-from app.routers import users
+from app.routers import monitors, users
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,3 +20,4 @@ async def get_health():
 
 
 app.include_router(users.router)
+app.include_router(monitors.router)
