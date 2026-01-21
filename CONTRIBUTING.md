@@ -48,11 +48,11 @@ Primary goal is to expose complete HTTP routes before background jobs.
 - [x] POST /users/create  
 - [x] GET /users/me  
 
-- [ ] POST /monitors  
-- [ ] GET /monitors  
-- [ ] GET /monitors/{id}  
-- [ ] PATCH /monitors/{id}  
-- [ ] DELETE /monitors/{id}  
+- [x] POST /monitors  
+- [x] GET /monitors  
+- [x] GET /monitors/{id}  
+- [x] PATCH /monitors/{id}  
+- [x] DELETE /monitors/{id}  
 
 - [ ] GET /monitors/{id}/checks  
 - [ ] GET /monitors/{id}/stats  
