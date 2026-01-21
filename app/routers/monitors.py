@@ -36,5 +36,14 @@ async def create_model(monitor: MonitorCreate, db: AsyncSession = Depends(get_db
     await db.refresh(new_monitor)
     return new_monitor
 
-
+@router.get("/{telegram_id}", response_model=list[MonitorResponse])
+async def get_monitors(telegram_id: int, db: AsyncSession = Depends(get_db)):
+    owner = await db.execute(select(User).filter(User.telegram_id == telegram_id))
+    existing_user = owner.scalars().first()
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    monitors_query = await db.execute(select(Monitor).filter(Monitor.owner_id == existing_user.id))
+    monitors = monitors_query.scalars().all()
+    return monitors
     
