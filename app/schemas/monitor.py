@@ -35,6 +35,32 @@ class MonitorBase(BaseModel):
 
 class MonitorCreate(MonitorBase):
     telegram_id: int
+
+class MonitorUpdate(BaseModel):
+    telegram_id: int
+    url: Optional[HttpUrl] = None
+    name: Optional[str] = None
+    interval_seconds: Optional[int] = None
+    timeout_seconds: Optional[int] = None
+    expected_status: Optional[int] = None
+    is_active: Optional[bool] = None
+
+    @field_validator('url', mode='before')
+    @classmethod
+    def validate_url(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return v
+            if not v.startswith(('http://', 'https://')):
+                domain_regex = r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?::\d+)?(?:/.*)?$'
+                ip_regex = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?(?:/.*)?$'
+                
+                if re.match(domain_regex, v) or re.match(ip_regex, v) or v.startswith("localhost"):
+                   return f"https://{v}"
+        return v
     
 class MonitorResponse(MonitorBase):
     id: UUID

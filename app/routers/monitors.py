@@ -1,4 +1,5 @@
 import uuid
+from xml.parsers.expat import model
 from fastapi import FastAPI
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +7,7 @@ from sqlalchemy.future import select
 from app.database.connection import get_db
 from app.models import User, Monitor
 from app.schemas import user
-from app.schemas.monitor import MonitorCreate, MonitorResponse
+from app.schemas.monitor import MonitorCreate, MonitorResponse, MonitorUpdate
 
 router = APIRouter(
     prefix="/monitors",
@@ -37,9 +38,9 @@ async def create_model(monitor: MonitorCreate, db: AsyncSession = Depends(get_db
     await db.refresh(new_monitor)
     return new_monitor
 
-@router.get("/{owner_id}", response_model=list[MonitorResponse])
-async def get_monitors(owner_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    owner = await db.execute(select(User).filter(User.id == owner_id))
+@router.get("/user/{telegram_id}", response_model=list[MonitorResponse])
+async def get_monitors(telegram_id: int, db: AsyncSession = Depends(get_db)):
+    owner = await db.execute(select(User).filter(User.telegram_id == telegram_id))
     existing_user = owner.scalars().first()
     if not existing_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -48,6 +49,68 @@ async def get_monitors(owner_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     monitors = monitors_query.scalars().all()
     return monitors
 
+
+@router.get("/monitor/{monitor_id}", response_model=MonitorResponse)
+async def get_monitor(monitor_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    monitor_query = await db.execute(select(Monitor).filter(Monitor.id == monitor_id))
+    monitor = monitor_query.scalars().first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    return monitor
+
+
+@router.delete("/{monitor_id}", response_model=dict)
+async def delete_monitor(monitor_id: uuid.UUID, telegram_id: int, db: AsyncSession = Depends(get_db)):
+    owner = await db.execute(select(User).filter(User.telegram_id == telegram_id))
+    existing_user = owner.scalars().first()
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    monitor_query = await db.execute(select(Monitor).filter(Monitor.id == monitor_id))
+    existing_monitor = monitor_query.scalars().first()
+    
+    if not existing_monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+        
+    if existing_monitor.owner_id != existing_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this monitor")
+    
+    await db.delete(existing_monitor)
+    await db.commit()
+    return {"detail": "Monitor deleted successfully"}
+@router.put("/{monitor_id}", response_model=MonitorResponse)
+async def update_monitor(monitor_id: uuid.UUID, monitor_update: MonitorUpdate, db: AsyncSession = Depends(get_db)):
+    # Verify User
+    user_query = await db.execute(select(User).filter(User.telegram_id == monitor_update.telegram_id))
+    user = user_query.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    monitor_query = await db.execute(select(Monitor).filter(Monitor.id == monitor_id))
+    monitor = monitor_query.scalars().first()
+    if not monitor:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    
+    if monitor.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this monitor")
+    
+    if monitor_update.url is not None:
+        monitor.url = str(monitor_update.url)
+    if monitor_update.name is not None:
+        monitor.name = monitor_update.name
+    if monitor_update.interval_seconds is not None:
+        monitor.interval_seconds = monitor_update.interval_seconds
+    if monitor_update.timeout_seconds is not None:
+        monitor.timeout_seconds = monitor_update.timeout_seconds
+    if monitor_update.expected_status is not None:
+        monitor.expected_status = monitor_update.expected_status
+    if monitor_update.is_active is not None:
+        monitor.is_active = monitor_update.is_active
+
+    db.add(monitor)
+    await db.commit()
+    await db.refresh(monitor)
+    return monitor
 @router.get("", response_model=list[MonitorResponse])
 async def get_all_monitors(db: AsyncSession = Depends(get_db)):
     monitors_query = await db.execute(select(Monitor))
