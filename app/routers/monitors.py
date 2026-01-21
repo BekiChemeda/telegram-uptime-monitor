@@ -1,12 +1,10 @@
 import uuid
-from xml.parsers.expat import model
 from fastapi import FastAPI
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.database.connection import get_db
 from app.models import User, Monitor
-from app.schemas import user
 from app.schemas.monitor import MonitorCreate, MonitorResponse, MonitorUpdate
 
 router = APIRouter(
@@ -14,7 +12,7 @@ router = APIRouter(
     tags=["monitors"]
 )
 @router.post("/create", response_model=MonitorResponse)
-async def create_model(monitor: MonitorCreate, db: AsyncSession = Depends(get_db)):
+async def create_monitor(monitor: MonitorCreate, db: AsyncSession = Depends(get_db)):
     owner = await db.execute(select(User).filter(User.telegram_id == monitor.telegram_id))
     existing_user = owner.scalars().first()
     if not existing_user:
@@ -78,6 +76,7 @@ async def delete_monitor(monitor_id: uuid.UUID, telegram_id: int, db: AsyncSessi
     await db.delete(existing_monitor)
     await db.commit()
     return {"detail": "Monitor deleted successfully"}
+
 @router.put("/{monitor_id}", response_model=MonitorResponse)
 async def update_monitor(monitor_id: uuid.UUID, monitor_update: MonitorUpdate, db: AsyncSession = Depends(get_db)):
     # Verify User
