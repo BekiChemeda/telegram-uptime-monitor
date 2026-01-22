@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.database.connection import get_db
-from app.models import User, CheckLog
+from app.models import Monitor, User, CheckLog
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(
@@ -35,7 +35,7 @@ async def get_check_logs(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
     
 ## This endpoint retrieves check logs for a specific user.
-@router.get("/logs/{user_id}", response_model=list[CheckLog])
+@router.get("/logs/users/{user_id}", response_model=list[CheckLog])
 async def get_user_check_logs(user_id: int, db: AsyncSession = Depends(get_db)):
     UserQuery = select(User).where(User.id == user_id)
     result = await db.execute(UserQuery)
@@ -46,4 +46,22 @@ async def get_user_check_logs(user_id: int, db: AsyncSession = Depends(get_db)):
         check_logs = result.scalars().all()
         return check_logs
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+## This endpoint deletes all check logs for a specific monitored entity.
+@router.delete("/logs/monitors/{monitor_id}", response_model=list[CheckLog])
+async def get_monitor_check_logs(monitor_id: int, db: AsyncSession = Depends(get_db)):
+    MonitorQuery = select(Monitor).where(Monitor.id == monitor_id)
+    result = await db.execute(MonitorQuery)
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    try:
+        result = await db.execute(select(CheckLog).where(CheckLog.monitor_id == monitor_id))
+        check_logs = result.scalars().all()
+        for log in check_logs:
+            await db.delete(log)
+        await db.commit()
+        return check_logs
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
