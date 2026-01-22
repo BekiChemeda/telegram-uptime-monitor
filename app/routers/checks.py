@@ -33,3 +33,17 @@ async def get_check_logs(db: AsyncSession = Depends(get_db)):
         return check_logs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+## This endpoint retrieves check logs for a specific user.
+@router.get("/logs/{user_id}", response_model=list[CheckLog])
+async def get_user_check_logs(user_id: int, db: AsyncSession = Depends(get_db)):
+    UserQuery = select(User).where(User.id == user_id)
+    result = await db.execute(UserQuery)
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        result = await db.execute(select(CheckLog).where(CheckLog.user_id == user_id))
+        check_logs = result.scalars().all()
+        return check_logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
