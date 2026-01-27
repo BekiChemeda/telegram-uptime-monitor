@@ -3,8 +3,13 @@ import httpx
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
+from app.database.connection import async_session
+from app.models import Monitor, CheckLog
+import logging
 
-# ... imports ...
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 async def check_single_monitor(monitor: Monitor, session):
     """
@@ -22,7 +27,7 @@ async def check_single_monitor(monitor: Monitor, session):
         async with httpx.AsyncClient(timeout=monitor.timeout_seconds) as client:
             response = await client.get(url)
             status_code = response.status_code
-            response_time = (datetime.now() - start_time).total_seconds()
+            response_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             
             if monitor.expected_status:
                 is_up = (status_code == monitor.expected_status)

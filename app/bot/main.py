@@ -1,9 +1,12 @@
 import asyncio
 from app.bot.loader import bot
-import app.bot.handlers # Register handlers logic
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Register handlers logic only if bot is active
+if bot:
+    import app.bot.handlers 
 
 async def start_bot():
     if not bot:
