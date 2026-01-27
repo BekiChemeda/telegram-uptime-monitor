@@ -24,7 +24,7 @@ async def check_single_monitor(monitor: Monitor, session):
     response_time = 0
 
     try:
-        async with httpx.AsyncClient(timeout=monitor.timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=monitor.timeout_seconds, follow_redirects=True) as client:
             response = await client.get(url)
             status_code = response.status_code
             response_time = (datetime.now(timezone.utc) - start_time).total_seconds()
