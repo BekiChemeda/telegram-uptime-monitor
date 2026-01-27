@@ -20,6 +20,9 @@ class User(Base):
     username = Column(String, unique=True, nullable=True)
 
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Global settings
+    is_notification_enabled = Column(Boolean, default=True, nullable=False)
 
     monitors = relationship(
         "Monitor",
@@ -49,6 +52,7 @@ class Monitor(Base):
     expected_status = Column(Integer, default=200, nullable=False)
 
     is_active = Column(Boolean, default=True, nullable=False)
+    is_notification_enabled = Column(Boolean, default=True, nullable=False)
     last_status = Column(Boolean, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

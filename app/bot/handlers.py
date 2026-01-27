@@ -1,158 +1,231 @@
 from telebot.async_telebot import AsyncTeleBot
 from telebot import types
 from sqlalchemy.future import select
+from sqlalchemy import func
 from app.bot.loader import bot
+from app.bot import keyboards
 from app.database.connection import async_session
 from app.models import User, Monitor
 from app.schemas.monitor import MonitorCreate
+from app.services.stats_service import get_monitor_stats
 import re
+import uuid
 
-async def register_user(message):
-    telegram_id = message.from_user.id
-    username = message.from_user.username
-    
+# Helper to get user
+async def get_or_create_user(telegram_id, username):
     async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
-        
         if not user:
             new_user = User(telegram_id=telegram_id, username=username)
             session.add(new_user)
             await session.commit()
-            return True # Created
-        return False # Existed
+            return new_user, True
+        return user, False
 
-@bot.message_handler(commands=['start', 'help'])
+# --- Command Handlers ---
+
+@bot.message_handler(commands=['start'])
 async def send_welcome(message):
     telegram_id = message.from_user.id
-    created = await register_user(message)
+    user, created = await get_or_create_user(telegram_id, message.from_user.username)
     
     text = (
+        f"Welcome back, {message.from_user.first_name}! 👋\n"
+        if not created else
         f"Welcome {message.from_user.first_name}! 👋\n"
-        f"I am your Uptime Monitor Bot. 🤖\n\n"
-        f"Commands:\n"
-        f"/add <url> - Add a new monitor\n"
-        f"/list - List your monitors\n"
-        f"/del <id> - Delete a monitor (get ID from /list)\n"
+        f"I am your Uptime Monitor Bot. 🤖\n"
     )
-    if created:
-        text += "\nChecked into the system! ✅"
-        
-    await bot.reply_to(message, text)
+    text += "Use the menu below to manage your monitors."
+    
+    await bot.reply_to(message, text, reply_markup=keyboards.main_menu())
 
-@bot.message_handler(commands=['add'])
-async def add_monitor(message):
-    # Format: /add https://google.com [interval]
-    parts = message.text.split()
-    if len(parts) < 2:
-        await bot.reply_to(message, "Usage: /add <url> [name]")
-        return
+# --- Text Menu Handlers ---
+
+@bot.message_handler(func=lambda msg: msg.text == "➕ Add Site")
+async def menu_add_site(message):
+    await bot.reply_to(message, "Please enter the URL of the website you want to monitor (e.g., https://google.com):")
+    bot.register_next_step_handler(message, process_url_step)
+
+async def process_url_step(message):
+    url = message.text.strip()
     
-    url = parts[1]
-    name = parts[2] if len(parts) > 2 else url
-    
-    # URL Validation (Basic)
+    # Basic URL validation
     if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
+        url = 'https://' + url # Default to https
+        
+    # We could ask for name next, or just save it. User asked for "Add Site... lists buttons...".
+    # Let's ask for name to be polite.
+    await bot.reply_to(message, f"URL: {url}\n\nNow, give this monitor a short name (e.g., 'My Portfolio'):")
+    bot.register_next_step_handler(message, process_name_step, url)
 
+async def process_name_step(message, url):
+    name = message.text.strip()
     telegram_id = message.from_user.id
     
     async with async_session() as session:
-        # Get User
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
-        if not user:
-            await bot.reply_to(message, "Please start the bot first with /start")
-            return
-
+        
         # Check existing
-        result = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id, Monitor.url == url))
-        if result.scalars().first():
-            await bot.reply_to(message, "You are already monitoring this URL.")
+        existing = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id, Monitor.url == url))
+        if existing.scalars().first():
+            await bot.reply_to(message, "You are already monitoring this URL!", reply_markup=keyboards.main_menu())
             return
-
+            
         new_monitor = Monitor(
             owner_id=user.id,
             url=url,
             name=name,
-            interval_seconds=60,
-            timeout_seconds=10,
-            expected_status=200,
+            interval_seconds=60, 
             is_active=True
         )
         session.add(new_monitor)
         await session.commit()
         
-    await bot.reply_to(message, f"Monitor added! 🚀\nURL: {url}\nInterval: 60s")
+    await bot.reply_to(message, f"✅ Site Added!\nName: {name}\nURL: {url}", reply_markup=keyboards.main_menu())
 
-@bot.message_handler(commands=['list'])
-async def list_monitors(message):
+@bot.message_handler(func=lambda msg: msg.text == "📋 My Sites")
+async def menu_my_sites(message):
     telegram_id = message.from_user.id
-    
     async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
-        if not user:
-             await bot.reply_to(message, "Please start the bot first with /start")
-             return
-             
-        result = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id))
-        monitors = result.scalars().all()
+        result_m = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id))
+        monitors = result_m.scalars().all()
         
-        if not monitors:
-            await bot.reply_to(message, "You have no monitors. Add one with /add")
-            return
-            
-        text = "YOUR MONITORS: 📋\n\n"
-        for m in monitors:
-            status = "🟢 UP" if m.last_status else "🔴 DOWN"
-            if m.last_status is None: status = "⚪ PENDING"
-            
-            # Escape markdown special chars if needed, or use simple concatenation
-            text += f"ID: `{m.id}`\nName: {m.name}\nURL: {m.url}\nStatus: {status}\nLast Check: {m.last_checked}\n\n"
-            
-        await bot.reply_to(message, text, parse_mode='Markdown')
+    if not monitors:
+        await bot.reply_to(message, "You haven't added any sites yet.", reply_markup=keyboards.main_menu())
+    else:
+        await bot.reply_to(
+            message, 
+            "Your Monitored Sites:", 
+            reply_markup=keyboards.my_sites_menu(monitors)
+        )
 
-@bot.message_handler(commands=['del'])
-async def delete_monitor(message):
-    parts = message.text.split()
-    if len(parts) < 2:
-        await bot.reply_to(message, "Usage: /del <monitor_id>")
+@bot.message_handler(func=lambda msg: msg.text == "👤 My Account")
+async def menu_account(message):
+    telegram_id = message.from_user.id
+    async with async_session() as session:
+        result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
+        user = result.scalars().first()
+        
+        # Count monitors
+        count_q = await session.execute(select(func.count(Monitor.id)).filter(Monitor.owner_id == user.id))
+        count = count_q.scalar()
+        
+    text = (
+        f"👤 **Account Info**\n\n"
+        f"**Username:** @{user.username}\n"
+        f"**Joined:** {user.joined_at.strftime('%Y-%m-%d')}\n"
+        f"**Total Monitors:** {count}\n"
+    )
+    await bot.reply_to(message, text, parse_mode='Markdown', reply_markup=keyboards.main_menu())
+
+@bot.message_handler(func=lambda msg: msg.text == "⚙️ Settings")
+async def menu_settings(message):
+    telegram_id = message.from_user.id
+    async with async_session() as session:
+        result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
+        user = result.scalars().first()
+    
+    await bot.reply_to(
+        message, 
+        "Global Settings:", 
+        reply_markup=keyboards.settings_menu(user.is_notification_enabled)
+    )
+
+# --- Callback Handlers ---
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('site_'))
+async def callback_site_details(call):
+    monitor_id_str = call.data.split('_')[1]
+    monitor_id = uuid.UUID(monitor_id_str)
+    
+    stats = await get_monitor_stats(monitor_id)
+    
+    if not stats:
+        await bot.answer_callback_query(call.id, "Monitor not found!")
         return
-    
-    monitor_id_str = parts[1]
-    telegram_id = message.from_user.id
-    
-    async with async_session() as session:
-        # Verify ownership
-        # Need to join or 2 queries.
-        # Simplest: Get monitor, check owner
         
-        # UUID parsing
-        try:
-            import uuid
-            m_uuid = uuid.UUID(monitor_id_str)
-        except ValueError:
-             await bot.reply_to(message, "Invalid ID format.")
-             return
+    status_emoji = "🟢 UP" if stats['current_status'] else "🔴 DOWN"
+    if stats['current_status'] is None: status_emoji = "⚪ PENDING"
+    
+    text = (
+        f"🌐 **{stats['name']}**\n"
+        f"🔗 {stats['url']}\n\n"
+        f"**Status:** {status_emoji}\n"
+        f"**Last Checked:** {stats['last_checked'].strftime('%Y-%m-%d %H:%M:%S UTC') if stats['last_checked'] else 'Never'}\n\n"
+        f"**Incidents (24h):** {stats['incidents_24h']}\n"
+        f"**Incidents (7d):** {stats['incidents_7d']}\n"
+    )
+    if stats['last_incident']:
+         text += f"**Last Incident:** {stats['last_incident'].strftime('%Y-%m-%d %H:%M UTC')}\n"
 
-        result = await session.execute(select(Monitor).filter(Monitor.id == m_uuid))
-        monitor = result.scalars().first()
-        
-        if not monitor:
-            await bot.reply_to(message, "Monitor not found.")
-            return
-            
-        # Get user to check ID
+    try:
+        await bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=text,
+            parse_mode='Markdown',
+            reply_markup=keyboards.site_details_menu(monitor_id_str)
+        )
+    except Exception as e:
+        # Sometimes editing fails if content is same
+        pass
+
+@bot.callback_query_handler(func=lambda call: call.data == "menu_my_sites")
+async def callback_back_to_list(call):
+    # Reuse logic from menu_my_sites but edit message instead of reply
+    telegram_id = call.from_user.id
+    async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
-        
-        if not user or monitor.owner_id != user.id:
-            await bot.reply_to(message, "You are not authorized to delete this monitor.")
-            return
+        result_m = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id))
+        monitors = result_m.scalars().all()
+    
+    await bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text="Your Monitored Sites:",
+        reply_markup=keyboards.my_sites_menu(monitors)
+    )
 
-        await session.delete(monitor)
+@bot.callback_query_handler(func=lambda call: call.data.startswith('del_'))
+async def callback_delete_monitor(call):
+    monitor_id_str = call.data.split('_')[1]
+    monitor_id = uuid.UUID(monitor_id_str)
+    
+    async with async_session() as session:
+        monitor = await session.get(Monitor, monitor_id)
+        if monitor:
+            await session.delete(monitor)
+            await session.commit()
+            
+    await bot.answer_callback_query(call.id, "Monitor deleted.")
+    await callback_back_to_list(call)
+
+@bot.callback_query_handler(func=lambda call: call.data == "toggle_global_notif")
+async def callback_toggle_notif(call):
+    telegram_id = call.from_user.id
+    async with async_session() as session:
+        result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
+        user = result.scalars().first()
+        user.is_notification_enabled = not user.is_notification_enabled
+        new_state = user.is_notification_enabled
         await session.commit()
     
-    await bot.reply_to(message, "Monitor deleted. 🗑️")
+    await bot.edit_message_reply_markup(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboards.settings_menu(new_state)
+    )
+    status = "ON" if new_state else "OFF"
+    await bot.answer_callback_query(call.id, f"Notifications turned {status}")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "close_settings")
+async def callback_close(call):
+    await bot.delete_message(call.message.chat.id, call.message.message_id)
+
 
