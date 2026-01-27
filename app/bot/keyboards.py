@@ -1,13 +1,13 @@
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.models import Monitor
 
 def main_menu():
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
-        KeyboardButton("➕ Add Site"),
-        KeyboardButton("📋 My Sites"),
-        KeyboardButton("👤 My Account"),
-        KeyboardButton("⚙️ Settings")
+        InlineKeyboardButton("➕ Add Site", callback_data="menu_add_site"),
+        InlineKeyboardButton("📋 My Sites", callback_data="menu_my_sites"),
+        InlineKeyboardButton("👤 My Account", callback_data="menu_account"),
+        InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")
     )
     return markup
 
@@ -21,16 +21,24 @@ def my_sites_menu(monitors: list[Monitor]):
         if m.last_status is None: status_icon = "⚪"
         markup.add(InlineKeyboardButton(f"{status_icon} {m.name or m.url}", callback_data=f"site_{m.id}"))
     
+    markup.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu"))
     return markup
 
-def site_details_menu(monitor_id):
+def site_details_menu(monitor_id, url=None):
     markup = InlineKeyboardMarkup(row_width=2)
-    markup.add(
+    buttons = []
+    
+    if url:
+        buttons.append(InlineKeyboardButton("🌍 Visit Site", url=url))
+        
+    buttons.extend([
         InlineKeyboardButton("📊 Statistics", callback_data=f"stats_{monitor_id}"),
         InlineKeyboardButton("✏️ Edit", callback_data=f"edit_{monitor_id}"),
         InlineKeyboardButton("🗑️ Delete", callback_data=f"del_{monitor_id}"),
         InlineKeyboardButton("🔙 Back to List", callback_data="menu_my_sites")
-    )
+    ])
+    
+    markup.add(*buttons)
     return markup
 
 def settings_menu(user_notification_enabled: bool):
@@ -39,5 +47,5 @@ def settings_menu(user_notification_enabled: bool):
     notif_text = "🔔 Notifications: ON" if user_notification_enabled else "🔕 Notifications: OFF"
     markup.add(InlineKeyboardButton(notif_text, callback_data="toggle_global_notif"))
     
-    markup.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="close_settings")) # Or just close
+    markup.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu"))
     return markup

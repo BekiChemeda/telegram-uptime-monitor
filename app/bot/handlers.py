@@ -11,6 +11,11 @@ from app.services.stats_service import get_monitor_stats
 import re
 import uuid
 
+# State Management
+STATES = {}
+STATE_WAITING_URL = 'WAITING_URL'
+STATE_WAITING_NAME = 'WAITING_NAME'
+
 # Helper to get user
 async def get_or_create_user(telegram_id, username):
     async with async_session() as session:
@@ -40,72 +45,99 @@ async def send_welcome(message):
     
     await bot.reply_to(message, text, reply_markup=keyboards.main_menu())
 
-# --- Text Menu Handlers ---
+# --- Menu Handlers ---
 
-@bot.message_handler(func=lambda msg: msg.text == "➕ Add Site")
-async def menu_add_site(message):
-    await bot.reply_to(message, "Please enter the URL of the website you want to monitor (e.g., https://google.com):")
-    bot.register_next_step_handler(message, process_url_step)
+@bot.callback_query_handler(func=lambda call: call.data == "main_menu")
+async def callback_main_menu(call):
+    text = "Use the menu below to manage your monitors."
+    await bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=text,
+        reply_markup=keyboards.main_menu()
+    )
 
+@bot.callback_query_handler(func=lambda call: call.data == "menu_add_site")
+async def callback_add_site(call):
+    # Answer callback to stop loading animation
+    await bot.answer_callback_query(call.id)
+    
+    # Set state
+    STATES[call.from_user.id] = {'state': STATE_WAITING_URL}
+    
+    # Send prompt
+    await bot.send_message(call.message.chat.id, "Please enter the URL of the website you want to monitor (e.g., https://google.com):")
+
+@bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_URL)
 async def process_url_step(message):
-    url = message.text.strip()
-    
-    # Basic URL validation
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url # Default to https
+    try:
+        url = message.text.strip()
         
-    # We could ask for name next, or just save it. User asked for "Add Site... lists buttons...".
-    # Let's ask for name to be polite.
-    await bot.reply_to(message, f"URL: {url}\n\nNow, give this monitor a short name (e.g., 'My Portfolio'):")
-    bot.register_next_step_handler(message, process_name_step, url)
-
-async def process_name_step(message, url):
-    name = message.text.strip()
-    telegram_id = message.from_user.id
-    
-    async with async_session() as session:
-        result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
-        user = result.scalars().first()
-        
-        # Check existing
-        existing = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id, Monitor.url == url))
-        if existing.scalars().first():
-            await bot.reply_to(message, "You are already monitoring this URL!", reply_markup=keyboards.main_menu())
-            return
+        # Basic URL validation
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url # Default to https
             
-        new_monitor = Monitor(
-            owner_id=user.id,
-            url=url,
-            name=name,
-            interval_seconds=60, 
-            is_active=True
-        )
-        session.add(new_monitor)
-        await session.commit()
+        # Update state with URL and move to next step
+        STATES[message.from_user.id] = {'state': STATE_WAITING_NAME, 'url': url}
         
-    await bot.reply_to(message, f"✅ Site Added!\nName: {name}\nURL: {url}", reply_markup=keyboards.main_menu())
+        await bot.reply_to(message, f"URL: {url}\n\nNow, give this monitor a short name (e.g., 'My Portfolio'):")
+    except Exception as e:
+        await bot.reply_to(message, f"An error occurred: {e}")
+        # Clear state on error
+        if message.from_user.id in STATES:
+            del STATES[message.from_user.id]
 
-@bot.message_handler(func=lambda msg: msg.text == "📋 My Sites")
-async def menu_my_sites(message):
-    telegram_id = message.from_user.id
-    async with async_session() as session:
-        result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
-        user = result.scalars().first()
-        result_m = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id))
-        monitors = result_m.scalars().all()
+@bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_NAME)
+async def process_name_step(message):
+    try:
+        user_id = message.from_user.id
+        state_data = STATES.get(user_id)
+        if not state_data:
+            return # Should not happen given the filter
+            
+        url = state_data['url']
+        name = message.text.strip()
         
-    if not monitors:
-        await bot.reply_to(message, "You haven't added any sites yet.", reply_markup=keyboards.main_menu())
-    else:
-        await bot.reply_to(
-            message, 
-            "Your Monitored Sites:", 
-            reply_markup=keyboards.my_sites_menu(monitors)
-        )
+        # database operations...
+        telegram_id = message.from_user.id
+        
+        async with async_session() as session:
+            result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
+            user = result.scalars().first()
+            
+            # Check existing
+            existing = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id, Monitor.url == url))
+            if existing.scalars().first():
+                await bot.reply_to(message, "You are already monitoring this URL!", reply_markup=keyboards.main_menu())
+                del STATES[user_id]
+                return
+                
+            new_monitor = Monitor(
+                owner_id=user.id,
+                url=url,
+                name=name,
+                interval_seconds=60, 
+                is_active=True
+            )
+            session.add(new_monitor)
+            await session.commit()
+            
+        await bot.reply_to(message, f"✅ Site Added!\nName: {name}\nURL: {url}", reply_markup=keyboards.main_menu())
+        
+        # Clean up state
+        del STATES[user_id]
+        
+    except Exception as e:
+        await bot.reply_to(message, f"An error occurred: {e}")
+        if message.from_user.id in STATES:
+            del STATES[message.from_user.id]
 
-@bot.message_handler(func=lambda msg: msg.text == "👤 My Account")
-async def menu_account(message):
-    telegram_id = message.from_user.id
+# Note: menu_my_sites is handled by callback_back_to_list (should be renamed to callback_my_sites for clarity, but logic is same)
+# We will use the existing callback handler for data='menu_my_sites'
+
+@bot.callback_query_handler(func=lambda call: call.data == "menu_account")
+async def callback_account(call):
+    telegram_id = call.from_user.id
     async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
@@ -115,25 +147,49 @@ async def menu_account(message):
         count = count_q.scalar()
         
     text = (
-        f"👤 **Account Info**\n\n"
-        f"**Username:** @{user.username}\n"
-        f"**Joined:** {user.joined_at.strftime('%Y-%m-%d')}\n"
-        f"**Total Monitors:** {count}\n"
+        f"👤 Account Info\n\n"
+        f"Username: @{user.username}\n"
+        f"Joined: {user.joined_at.strftime('%Y-%m-%d')}\n"
+        f"Total Monitors: {count}\n"
     )
-    await bot.reply_to(message, text, parse_mode='Markdown', reply_markup=keyboards.main_menu())
+    # Edit the message instead of replying
+    try:
+        await bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=text,
+            # parse_mode='Markdown', # Removed to prevent errors with underscores in usernames
+            reply_markup=keyboards.main_menu() 
+        )
+    except Exception as e:
+        print(f"Error editing message (My Account): {e}")
+        await bot.answer_callback_query(call.id, "Error loading account info.")
+    
+    await bot.answer_callback_query(call.id)
+    # Add a "Back" button to the text via main_menu? 
+    # The main_menu() returns the main buttons. 
+    # If we are in "Account Info", we might want a "Back" button instead of the full menu immediately.
+    # But for simplicity, let's show the content AND the main menu options below it, or just a Back button.
+    # The user asked for navigation. Showing the main menu buttons again allows quick navigation.
+    # However, standard practice is a "Back" button.
+    # Let's adjust main_menu to be used only on root.
+    # But wait, the previous code used `reply_markup=keyboards.main_menu()`.
+    # Implementation: Text displayed is Account info, buttons below are Main Menu actions. This works as a "Tab" switch.
 
-@bot.message_handler(func=lambda msg: msg.text == "⚙️ Settings")
-async def menu_settings(message):
-    telegram_id = message.from_user.id
+@bot.callback_query_handler(func=lambda call: call.data == "menu_settings")
+async def callback_settings(call):
+    telegram_id = call.from_user.id
     async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
         user = result.scalars().first()
     
-    await bot.reply_to(
-        message, 
-        "Global Settings:", 
+    await bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text="Global Settings:", 
         reply_markup=keyboards.settings_menu(user.is_notification_enabled)
     )
+
 
 # --- Callback Handlers ---
 
@@ -168,7 +224,7 @@ async def callback_site_details(call):
             message_id=call.message.message_id,
             text=text,
             parse_mode='Markdown',
-            reply_markup=keyboards.site_details_menu(monitor_id_str)
+            reply_markup=keyboards.site_details_menu(monitor_id_str, stats['url'])
         )
     except Exception as e:
         # Sometimes editing fails if content is same
@@ -176,7 +232,6 @@ async def callback_site_details(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu_my_sites")
 async def callback_back_to_list(call):
-    # Reuse logic from menu_my_sites but edit message instead of reply
     telegram_id = call.from_user.id
     async with async_session() as session:
         result = await session.execute(select(User).filter(User.telegram_id == telegram_id))
@@ -184,11 +239,21 @@ async def callback_back_to_list(call):
         result_m = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id))
         monitors = result_m.scalars().all()
     
+    if not monitors:
+        text = "You haven't added any sites yet."
+        markup = keyboards.main_menu() # Go back to main menu options
+    else:
+        text = "Your Monitored Sites:"
+        markup = keyboards.my_sites_menu(monitors)
+        # We need to ensure my_sites_menu returns a markup that allows going back?
+        # my_sites_menu handles list. Does it have a "Back" button?
+        # Let's check keyboards.py
+
     await bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
-        text="Your Monitored Sites:",
-        reply_markup=keyboards.my_sites_menu(monitors)
+        text=text,
+        reply_markup=markup
     )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('del_'))
@@ -222,10 +287,5 @@ async def callback_toggle_notif(call):
     )
     status = "ON" if new_state else "OFF"
     await bot.answer_callback_query(call.id, f"Notifications turned {status}")
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "close_settings")
-async def callback_close(call):
-    await bot.delete_message(call.message.chat.id, call.message.message_id)
 
 
