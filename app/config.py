@@ -1,8 +1,10 @@
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
-# Load .env file, overriding any existing environment variables
-load_dotenv(override=True)
+# Explicitly find the .env file in the project root
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
