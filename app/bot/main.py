@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 # Register handlers logic only if bot is active
 if bot:
     import app.bot.handlers 
+    import app.bot.admin_handlers
 
 async def start_bot():
     if not bot:
