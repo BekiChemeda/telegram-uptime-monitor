@@ -235,7 +235,7 @@ async def handler_quota_limit(message):
         if user:
             user.email_limit = new_limit
             await session.commit()
-            await bot.reply_to(message, f"✅ Updated quota for user `{target_id}` to `{new_limit}` emails/day.", reply_markup=keyboards.admin_menu())
+            await bot.reply_to(message, f"✅ Updated quota for user {target_id} to {new_limit} emails/day.", reply_markup=keyboards.admin_menu())
         else:
             await bot.reply_to(message, "⚠️ User not found.", reply_markup=keyboards.admin_menu())
             
