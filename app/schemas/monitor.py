@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, HttpUrl, field_validator, validator
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
@@ -7,7 +7,7 @@ import re
 class MonitorBase(BaseModel):
     url: HttpUrl
     name: str
-    interval_seconds:  Optional[int] = 60
+    interval_seconds:  Optional[int] = 180
     timeout_seconds: Optional[int] = 10
     expected_status: Optional[int] = 200
     is_active: Optional[bool] = True
@@ -39,6 +39,12 @@ class MonitorBase(BaseModel):
                 
                 if re.match(domain_regex, v) or re.match(ip_regex, v) or v.startswith("localhost"):
                    return f"https://{v}"
+        return v
+
+    @validator('interval_seconds')
+    def interval_must_be_at_least_180(cls, v):
+        if v is not None and v < 180:
+            raise ValueError('Interval must be at least 180 seconds (3 minutes)')
         return v
 
 class MonitorCreate(MonitorBase):
@@ -77,6 +83,12 @@ class MonitorUpdate(BaseModel):
                    return f"https://{v}"
         return v
     
+    @validator('interval_seconds')
+    def interval_must_be_at_least_180(cls, v):
+        if v is not None and v < 180:
+            raise ValueError('Interval must be at least 180 seconds (3 minutes)')
+        return v
+
 class MonitorResponse(MonitorBase):
     id: UUID
     owner_id: UUID

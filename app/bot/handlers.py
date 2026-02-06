@@ -66,7 +66,7 @@ async def send_welcome(message):
     )
     text += "Use the menu below to manage your monitors."
     
-    await bot.reply_to(message, text, reply_markup=keyboards.main_menu())
+    await bot.reply_to(message, text, reply_markup=keyboards.main_menu(), disable_web_page_preview=True)
 
 @bot.message_handler(commands=['feedback'])
 async def start_feedback_flow(message):
@@ -75,7 +75,7 @@ async def start_feedback_flow(message):
         "I'd love to hear your thoughts.\n"
         "Please type a short message about what should improve (tap Cancel if you change your mind)."
     )
-    await bot.reply_to(message, prompt, reply_markup=keyboards.cancel_button())
+    await bot.reply_to(message, prompt, reply_markup=keyboards.cancel_button(), disable_web_page_preview=True)
 
 @bot.message_handler(commands=['reply'])
 async def admin_reply(message):
@@ -101,10 +101,10 @@ async def admin_reply(message):
         return
 
     try:
-        await bot.send_message(target_id, f"Admin reply:\n{reply_body}")
-        await bot.reply_to(message, "Sent!")
+        await bot.send_message(target_id, f"Admin reply:\n{reply_body}", disable_web_page_preview=True)
+        await bot.reply_to(message, "Sent!", disable_web_page_preview=True)
     except Exception as exc:
-        await bot.reply_to(message, f"Could not deliver reply: {exc}")
+        await bot.reply_to(message, f"Could not deliver reply: {exc}", disable_web_page_preview=True)
 
 # --- Menu Handlers ---
 
@@ -247,7 +247,7 @@ async def callback_add_site(call):
     STATES[call.from_user.id] = {'state': STATE_WAITING_URL}
     
     # Send prompt
-    await bot.send_message(call.message.chat.id, "Please enter the URL of the website you want to monitor (e.g., https://google.com):", reply_markup=keyboards.cancel_button())
+    await bot.send_message(call.message.chat.id, "Please enter the URL of the website you want to monitor (e.g., https://google.com):", reply_markup=keyboards.cancel_button(), disable_web_page_preview=True)
 
 @bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_URL)
 async def process_url_step(message):
@@ -261,9 +261,9 @@ async def process_url_step(message):
         # Update state with URL and move to next step
         STATES[message.from_user.id] = {'state': STATE_WAITING_NAME, 'url': url}
         
-        await bot.reply_to(message, f"URL: {url}\n\nNow, give this monitor a short name (e.g., 'My Portfolio'):", reply_markup=keyboards.cancel_button())
+        await bot.reply_to(message, f"URL: {url}\n\nNow, give this monitor a short name (e.g., 'My Portfolio'):", reply_markup=keyboards.cancel_button(), disable_web_page_preview=True)
     except Exception as e:
-        await bot.reply_to(message, f"An error occurred: {e}")
+        await bot.reply_to(message, f"An error occurred: {e}", disable_web_page_preview=True)
         # Clear state on error
         if message.from_user.id in STATES:
             del STATES[message.from_user.id]
@@ -289,7 +289,7 @@ async def process_name_step(message):
             # Check existing
             existing = await session.execute(select(Monitor).filter(Monitor.owner_id == user.id, Monitor.url == url))
             if existing.scalars().first():
-                await bot.reply_to(message, "You are already monitoring this URL!", reply_markup=keyboards.main_menu())
+                await bot.reply_to(message, "You are already monitoring this URL!", reply_markup=keyboards.main_menu(), disable_web_page_preview=True)
                 del STATES[user_id]
                 return
                 
@@ -303,13 +303,13 @@ async def process_name_step(message):
             session.add(new_monitor)
             await session.commit()
             
-        await bot.reply_to(message, f"✅ Site Added!\nName: {name}\nURL: {url}", reply_markup=keyboards.main_menu())
+        await bot.reply_to(message, f"✅ Site Added!\nName: {name}\nURL: {url}", reply_markup=keyboards.main_menu(), disable_web_page_preview=True)
         
         # Clean up state
         del STATES[user_id]
         
     except Exception as e:
-        await bot.reply_to(message, f"An error occurred: {e}")
+        await bot.reply_to(message, f"An error occurred: {e}", disable_web_page_preview=True)
         if message.from_user.id in STATES:
             del STATES[message.from_user.id]
 
@@ -318,7 +318,7 @@ async def process_feedback_step(message):
     user_id = message.from_user.id
     feedback_text = (message.text or "").strip()
     if not feedback_text:
-        await bot.reply_to(message, "Please type a short message or tap Cancel.")
+        await bot.reply_to(message, "Please type a short message or tap Cancel.", disable_web_page_preview=True)
         return
 
     if message.from_user.username:
@@ -336,7 +336,8 @@ async def process_feedback_step(message):
                     f"From: {user_display}\n"
                     f"User ID: {user_id}\n"
                     f"Message:\n{feedback_text}{prompt_tail}"
-                )
+                ),
+                disable_web_page_preview=True
             )
             admin_delivered = True
         except Exception:
@@ -346,9 +347,9 @@ async def process_feedback_step(message):
         del STATES[user_id]
 
     if admin_delivered:
-        await bot.reply_to(message, "Thanks! The admins have your note and can reply soon.")
+        await bot.reply_to(message, "Thanks! The admins have your note and can reply soon.", disable_web_page_preview=True)
     else:
-        await bot.reply_to(message, "Thanks! Please also forward it to the admins so we do not miss it.")
+        await bot.reply_to(message, "Thanks! Please also forward it to the admins so we do not miss it.", disable_web_page_preview=True)
 
 # Note: menu_my_sites is handled by callback_back_to_list (should be renamed to callback_my_sites for clarity, but logic is same)
 # We will use the existing callback handler for data='menu_my_sites'
@@ -542,10 +543,10 @@ async def callback_check_now(call):
             await session.commit()
             
         emoji = "🟢 UP" if is_up else "🔴 DOWN"
-        await bot.send_message(call.message.chat.id, f"Check Complete for {monitor_full.name}:\nResult: **{emoji}**", parse_mode='Markdown')
+        await bot.send_message(call.message.chat.id, f"Check Complete for {monitor_full.name}:\nResult: **{emoji}**", parse_mode='Markdown', disable_web_page_preview=True)
         
     except Exception as e:
-        await bot.send_message(call.message.chat.id, f"Error running check: {e}")
+        await bot.send_message(call.message.chat.id, f"Error running check: {e}", disable_web_page_preview=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('stats_'))
 async def callback_stats_menu(call):
@@ -645,7 +646,8 @@ async def callback_edit_monitor_menu(call):
                 "Enter a word or phrase that MUST be present on the page (Case Sensitive).\n"
                 "Send `skip` to remove keyword checks.",
                 parse_mode='Markdown',
-                reply_markup=keyboards.cancel_button()
+                reply_markup=keyboards.cancel_button(),
+                disable_web_page_preview=True
             )
             await bot.answer_callback_query(call.id)
 
@@ -657,7 +659,8 @@ async def callback_edit_monitor_menu(call):
                 "Enter max seconds (e.g., `2.5`) before considering it 'Slow'.\n"
                 "Send `0` to disable.",
                 parse_mode='Markdown',
-                reply_markup=keyboards.cancel_button()
+                reply_markup=keyboards.cancel_button(),
+                disable_web_page_preview=True
             )
             await bot.answer_callback_query(call.id)
             
@@ -669,7 +672,8 @@ async def callback_edit_monitor_menu(call):
                 "Enter max seconds to wait for a response (e.g. `10`, `30`).\n"
                 "Default is 10s.",
                 parse_mode='Markdown',
-                reply_markup=keyboards.cancel_button()
+                reply_markup=keyboards.cancel_button(),
+                disable_web_page_preview=True
             )
             await bot.answer_callback_query(call.id)
 
@@ -681,7 +685,8 @@ async def callback_edit_monitor_menu(call):
                 "Enter the specific HTTP status code to expect (e.g., `201`, `301`).\n"
                 "Send `0` to allow any 2xx.",
                 parse_mode='Markdown',
-                reply_markup=keyboards.cancel_button()
+                reply_markup=keyboards.cancel_button(),
+                disable_web_page_preview=True
             )
             await bot.answer_callback_query(call.id)
             
@@ -700,18 +705,19 @@ async def process_keyword_step(message):
             if monitor:
                 monitor.keyword_include = kw_inc
                 await session.commit()
-                await bot.reply_to(message, "✅ Keyword settings updated!")
+                await bot.reply_to(message, "✅ Keyword settings updated!", disable_web_page_preview=True)
                 
                 # Show updated menu
                 await bot.send_message(
                     message.chat.id,
                     f"Back to settings for {monitor.name}:",
-                    reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor)
+                    reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor),
+                    disable_web_page_preview=True
                 )
 
         del STATES[user_id]
     except Exception as e:
-        await bot.reply_to(message, f"Error: {e}")
+        await bot.reply_to(message, f"Error: {e}", disable_web_page_preview=True)
 
 @bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_MAX_LATENCY)
 async def process_latency_step(message):
@@ -728,22 +734,21 @@ async def process_latency_step(message):
             if monitor:
                 monitor.max_response_time = val
                 await session.commit()
-                await bot.reply_to(message, "✅ Latency threshold updated!")
+                await bot.reply_to(message, "✅ Latency threshold updated!", disable_web_page_preview=True)
                 
                 # Show updated menu
                 await bot.send_message(
                     message.chat.id,
                     f"Back to settings for {monitor.name}:",
-                    reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor)
+                    reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor),
+                    disable_web_page_preview=True
                 )
 
         del STATES[user_id]
     except ValueError:
-        await bot.reply_to(message, "Please enter a valid number (e.g. 1.5) or 0.")
+        await bot.reply_to(message, "Please enter a valid number (e.g. 1.5) or 0.", disable_web_page_preview=True)
     except Exception as e:
-        await bot.reply_to(message, f"Error: {e}")
-
-
+        await bot.reply_to(message, f"Error: {e}", disable_web_page_preview=True)
 
 @bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_TIMEOUT)
 async def process_timeout_step(message):
@@ -760,11 +765,11 @@ async def process_timeout_step(message):
             if monitor:
                 monitor.timeout_seconds = val
                 await session.commit()
-                await bot.reply_to(message, "✅ Timeout updated!")
-                await bot.send_message(message.chat.id, f"Back to settings for {monitor.name}:", reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor))
+                await bot.reply_to(message, "✅ Timeout updated!", disable_web_page_preview=True)
+                await bot.send_message(message.chat.id, f"Back to settings for {monitor.name}:", reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor), disable_web_page_preview=True)
         del STATES[user_id]
     except:
-        await bot.reply_to(message, "Please enter a valid integer > 0.")
+        await bot.reply_to(message, "Please enter a valid integer > 0.", disable_web_page_preview=True)
 
 @bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_STATUS)
 async def process_status_step(message):
@@ -781,11 +786,11 @@ async def process_status_step(message):
             if monitor:
                 monitor.expected_status = val
                 await session.commit()
-                await bot.reply_to(message, "✅ Expected Status updated!")
-                await bot.send_message(message.chat.id, f"Back to settings for {monitor.name}:", reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor))
+                await bot.reply_to(message, "✅ Expected Status updated!", disable_web_page_preview=True)
+                await bot.send_message(message.chat.id, f"Back to settings for {monitor.name}:", reply_markup=keyboards.monitor_edit_menu(str(monitor_id), monitor), disable_web_page_preview=True)
         del STATES[user_id]
     except:
-        await bot.reply_to(message, "Please enter a valid status code (e.g. 200) or 0.")
+        await bot.reply_to(message, "Please enter a valid status code (e.g. 200) or 0.", disable_web_page_preview=True)
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu_my_sites")
 async def callback_back_to_list(call):
@@ -867,7 +872,7 @@ async def callback_toggle_notif(call):
 @bot.callback_query_handler(func=lambda call: call.data == "setup_email")
 async def callback_setup_email(call):
     STATES[call.from_user.id] = {'state': STATE_WAITING_EMAIL}
-    await bot.send_message(call.message.chat.id, "📧 Please reply with your email address:", reply_markup=keyboards.cancel_button())
+    await bot.send_message(call.message.chat.id, "📧 Please reply with your email address:", reply_markup=keyboards.cancel_button(), disable_web_page_preview=True)
     await bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_email_setup")
@@ -887,7 +892,7 @@ async def callback_back_to_email(call):
 async def process_email_step(message):
     email = message.text.strip()
     if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-        await bot.reply_to(message, "Invalid email format. Please try again.")
+        await bot.reply_to(message, "Invalid email format. Please try again.", disable_web_page_preview=True)
         return
 
     async with async_session() as session:
@@ -901,7 +906,7 @@ async def process_email_step(message):
                  user.verification_attempts_count = 0
         
         if user.verification_attempts_count >= 2:
-            await bot.reply_to(message, "❌ You have reached the maximum of 2 verification attempts for today. Please try again tomorrow.")
+            await bot.reply_to(message, "❌ You have reached the maximum of 2 verification attempts for today. Please try again tomorrow.", disable_web_page_preview=True)
             del STATES[message.from_user.id]
             return
 
@@ -922,21 +927,21 @@ async def process_email_step(message):
     subject = "Verify your email for Telegram Uptime Monitor"
     html_content = f"<h2>Verification Code</h2><p>Your code is: <strong>{code}</strong></p><p>Expires in 15 minutes.</p>"
     
-    await bot.send_message(message.chat.id, "⏳ Sending verification email...")
+    await bot.send_message(message.chat.id, "⏳ Sending verification email...", disable_web_page_preview=True)
     sent = await send_email(email, subject, html_content)
     
     if sent:
         STATES[message.from_user.id] = {'state': STATE_WAITING_VERIFICATION_CODE}
-        await bot.reply_to(message, f"📨 A verification code has been sent to {email}.\n\nPlease enter the 6-digit code here to verify:", reply_markup=keyboards.verification_code_menu())
+        await bot.reply_to(message, f"📨 A verification code has been sent to {email}.\n\nPlease enter the 6-digit code here to verify:", reply_markup=keyboards.verification_code_menu(), disable_web_page_preview=True)
     else:
-        await bot.reply_to(message, "❌ Failed to send verification email. Please check the address and try again.")
+        await bot.reply_to(message, "❌ Failed to send verification email. Please check the address and try again.", disable_web_page_preview=True)
         del STATES[message.from_user.id]
 
 @bot.message_handler(func=lambda msg: STATES.get(msg.from_user.id, {}).get('state') == STATE_WAITING_VERIFICATION_CODE)
 async def process_verification_code_step(message):
     code = message.text.strip()
     if not code.isdigit() or len(code) != 6:
-        await bot.reply_to(message, "Invalid format. Please enter the 6-digit code.")
+        await bot.reply_to(message, "Invalid format. Please enter the 6-digit code.", disable_web_page_preview=True)
         return
 
     async with async_session() as session:
@@ -947,12 +952,12 @@ async def process_verification_code_step(message):
         
         # Handle case where user might check verification but code is missing
         if not user.email_verification_code:
-             await bot.reply_to(message, "No pending verification found. Please set email again.")
+             await bot.reply_to(message, "No pending verification found. Please set email again.", disable_web_page_preview=True)
              del STATES[message.from_user.id]
              return
              
         if user.email_verification_expiry.replace(tzinfo=timezone.utc) < now:
-             await bot.reply_to(message, "❌ Code expired. Please start over.")
+             await bot.reply_to(message, "❌ Code expired. Please start over.", disable_web_page_preview=True)
              del STATES[message.from_user.id]
              return
              
@@ -962,10 +967,10 @@ async def process_verification_code_step(message):
             user.email_verification_code = None # clear
             await session.commit()
             
-            await bot.reply_to(message, "✅ Email Verified! Notifications are now ON.")
+            await bot.reply_to(message, "✅ Email Verified! Notifications are now ON.", disable_web_page_preview=True)
             del STATES[message.from_user.id]
         else:
-            await bot.reply_to(message, "❌ Incorrect code. Please try again.")
+            await bot.reply_to(message, "❌ Incorrect code. Please try again.", disable_web_page_preview=True)
 
 @bot.callback_query_handler(func=lambda call: call.data == "config_email")
 async def callback_config_email(call):
@@ -1029,7 +1034,7 @@ async def callback_toggle_email(call):
 async def admin_command(message):
     if message.from_user.id not in ADMIN_IDS:
         return
-    await bot.reply_to(message, "🔐 **Admin Panel**", reply_markup=keyboards.admin_menu())
+    await bot.reply_to(message, "🔐 **Admin Panel**", reply_markup=keyboards.admin_menu(), disable_web_page_preview=True)
 
 @bot.callback_query_handler(func=lambda call: call.data == "admin_menu")
 async def callback_admin_menu(call):
@@ -1109,16 +1114,17 @@ async def handler_broadcast_content(message):
     if content['type'] == 'forward':
         await bot.forward_message(message.chat.id, content['from_chat_id'], content['message_id'])
     elif content['type'] == 'photo':
-        await bot.send_photo(message.chat.id, content['file_id'], caption=content['text'])
+        await bot.send_photo(message.chat.id, content['file_id'], caption=content['text'], disable_web_page_preview=True)
     else:
-        await bot.send_message(message.chat.id, content['text'])
+        await bot.send_message(message.chat.id, content['text'], disable_web_page_preview=True)
 
     # Send confirmation prompt separately
     await bot.send_message(
         message.chat.id, 
         "Do you want to send this message?", 
         parse_mode='Markdown',
-        reply_markup=keyboards.admin_broadcast_menu()
+        reply_markup=keyboards.admin_broadcast_menu(),
+        disable_web_page_preview=True
     )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("broadcast_confirm_"))
@@ -1132,7 +1138,7 @@ async def callback_broadcast_confirm(call):
     if action == "no":
         STATES[user_id] = {}
         await bot.delete_message(call.message.chat.id, call.message.message_id)
-        await bot.send_message(call.message.chat.id, "❌ Broadcast cancelled.", reply_markup=keyboards.admin_menu())
+        await bot.send_message(call.message.chat.id, "❌ Broadcast cancelled.", reply_markup=keyboards.admin_menu(), disable_web_page_preview=True)
         return
 
     # Action is 'yes' - Start Broadcast
@@ -1141,7 +1147,7 @@ async def callback_broadcast_confirm(call):
         await bot.answer_callback_query(call.id, "Error: No content found.")
         return
 
-    msg = await bot.send_message(call.message.chat.id, "⏳ Sending broadcast...")
+    msg = await bot.send_message(call.message.chat.id, "⏳ Sending broadcast...", disable_web_page_preview=True)
     
     success_count = 0
     fail_count = 0
@@ -1155,9 +1161,9 @@ async def callback_broadcast_confirm(call):
                 if content.get('type') == 'forward':
                     await bot.forward_message(uid, content['from_chat_id'], content['message_id'])
                 elif content['type'] == 'photo':
-                    await bot.send_photo(uid, content['file_id'], caption=content['text'])
+                    await bot.send_photo(uid, content['file_id'], caption=content['text'], disable_web_page_preview=True)
                 else:
-                    await bot.send_message(uid, content['text'])
+                    await bot.send_message(uid, content['text'], disable_web_page_preview=True)
                 success_count += 1
             except Exception as e:
                 fail_count += 1

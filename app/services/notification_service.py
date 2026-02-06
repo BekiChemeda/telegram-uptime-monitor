@@ -48,7 +48,8 @@ async def send_notification(monitor: Monitor, previous_status: bool, current_sta
         await bot.send_message(
             chat_id=user.telegram_id,
             text=message,
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
+            disable_web_page_preview=True
         )
         logger.info(f"Notification sent to {user.telegram_id} for monitor {monitor.id}")
     except Exception as e:
