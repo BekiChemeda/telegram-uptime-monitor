@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-[tool.setuptools.find]
-packages = {include = ["app*"], exclude = ["alembic*"]}
+[tool.setuptools]
+packages = ["app"]
 dependencies = [
     "alembic>=1.18.1",
     "asyncpg>=0.31.0",
