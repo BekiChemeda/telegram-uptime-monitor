@@ -206,11 +206,12 @@ async def handler_quota_id(message):
         STATES[message.from_user.id]['state'] = STATE_SET_QUOTA_LIMIT
 
         limit = getattr(user, 'email_limit', 4)
+        username = (user.username or 'No Username').replace('_', '\\_')
 
         text = (
             f"👤 **User Found**\n"
             f"ID: `{user.telegram_id}`\n"
-            f"Name: {user.username or 'No Username'}\n"
+            f"Name: {username}\n"
             f"Current Quota: `{user.email_notification_count}/{limit}` (Daily)\n\n"
             "✏️ **Enter new daily email limit (0-100):**"
         )
