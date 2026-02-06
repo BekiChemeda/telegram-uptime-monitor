@@ -5,10 +5,12 @@ from sqlalchemy.future import select
 from app.database.connection import get_db
 from app.models import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.security import require_api_key
 
 router = APIRouter(
     prefix="/users",
-    tags=["users"]
+    tags=["users"],
+    dependencies=[Depends(require_api_key)]
 )
 
 

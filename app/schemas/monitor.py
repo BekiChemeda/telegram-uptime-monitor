@@ -11,6 +11,14 @@ class MonitorBase(BaseModel):
     timeout_seconds: Optional[int] = 10
     expected_status: Optional[int] = 200
     is_active: Optional[bool] = True
+    
+    # Pro Features
+    check_ssl: Optional[bool] = False
+    ssl_expiry_days_threshold: Optional[int] = 7
+    keyword_include: Optional[str] = None
+    keyword_exclude: Optional[str] = None
+    max_response_time: Optional[float] = None # seconds
+    consecutive_checks: Optional[int] = 3
 
     @field_validator('url', mode='before')
     @classmethod
@@ -44,6 +52,13 @@ class MonitorUpdate(BaseModel):
     timeout_seconds: Optional[int] = None
     expected_status: Optional[int] = None
     is_active: Optional[bool] = None
+    
+    check_ssl: Optional[bool] = None
+    ssl_expiry_days_threshold: Optional[int] = None
+    keyword_include: Optional[str] = None
+    keyword_exclude: Optional[str] = None
+    max_response_time: Optional[float] = None
+    consecutive_checks: Optional[int] = None
 
     @field_validator('url', mode='before')
     @classmethod

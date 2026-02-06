@@ -6,10 +6,12 @@ from sqlalchemy.future import select
 from app.database.connection import get_db
 from app.models import User, Monitor
 from app.schemas.monitor import MonitorCreate, MonitorResponse, MonitorUpdate
+from app.security import require_api_key
 
 router = APIRouter(
     prefix="/monitors",
-    tags=["monitors"]
+    tags=["monitors"],
+    dependencies=[Depends(require_api_key)]
 )
 @router.post("/create", response_model=MonitorResponse)
 async def create_monitor(monitor: MonitorCreate, db: AsyncSession = Depends(get_db)):
@@ -29,7 +31,14 @@ async def create_monitor(monitor: MonitorCreate, db: AsyncSession = Depends(get_
         interval_seconds=monitor.interval_seconds,
         timeout_seconds=monitor.timeout_seconds,
         expected_status=monitor.expected_status,
-        is_active=monitor.is_active
+        is_active=monitor.is_active,
+        # Pro Features
+        check_ssl=monitor.check_ssl,
+        ssl_expiry_days_threshold=monitor.ssl_expiry_days_threshold,
+        keyword_include=monitor.keyword_include,
+        keyword_exclude=monitor.keyword_exclude,
+        max_response_time=monitor.max_response_time,
+        consecutive_checks=monitor.consecutive_checks
     )
     db.add(new_monitor)
     await db.commit()
@@ -105,11 +114,25 @@ async def update_monitor(monitor_id: uuid.UUID, monitor_update: MonitorUpdate, d
         monitor.expected_status = monitor_update.expected_status
     if monitor_update.is_active is not None:
         monitor.is_active = monitor_update.is_active
+        
+    # Pro Features
+    if monitor_update.check_ssl is not None:
+        monitor.check_ssl = monitor_update.check_ssl
+    if monitor_update.ssl_expiry_days_threshold is not None:
+        monitor.ssl_expiry_days_threshold = monitor_update.ssl_expiry_days_threshold
+    if monitor_update.keyword_include is not None:
+        monitor.keyword_include = monitor_update.keyword_include
+    if monitor_update.keyword_exclude is not None:
+        monitor.keyword_exclude = monitor_update.keyword_exclude
+    if monitor_update.max_response_time is not None:
+        monitor.max_response_time = monitor_update.max_response_time
+    if monitor_update.consecutive_checks is not None:
+        monitor.consecutive_checks = monitor_update.consecutive_checks
 
-    db.add(monitor)
     await db.commit()
     await db.refresh(monitor)
     return monitor
+
 @router.get("", response_model=list[MonitorResponse])
 async def get_all_monitors(db: AsyncSession = Depends(get_db)):
     monitors_query = await db.execute(select(Monitor))

@@ -8,10 +8,12 @@ from sqlalchemy.future import select
 from app.database.connection import get_db
 from app.models import Monitor, User, CheckLog
 from app.schemas.checks import CheckLogCreate, CheckLogResponse
+from app.security import require_api_key
 
 router = APIRouter(
     prefix="/checks",
-    tags=["checks"]
+    tags=["checks"],
+    dependencies=[Depends(require_api_key)]
 )
 
 

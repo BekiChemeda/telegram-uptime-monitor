@@ -1,32 +1,28 @@
 # Use official Python image
 FROM python:3.12-slim
 
+ENV PYTHONUNBUFFERED=1 \
+	PIP_NO_CACHE_DIR=1
+
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (for building some python packages if needed)
-# libpq-dev is needed for logging postgres driver sometimes, though we use binary check pyproject
-# RUN apt-get update && apt-get install -y libpq-dev gcc && rm -rf /var/lib/apt/lists/*
-
-# Copy project files
-COPY pyproject.toml .
-# If you have requirements.txt, checking... Pyproject used.
-# We need to install dependencies from pyproject.toml
-# Installing uv or poetry or build tools might be needed. 
-# Simplest is just pip install .
-# But let's check if there is a requirements.txt or we should generte one.
-
-# Let's generate requirements.txt first for stability in docker build if not using poetry/uv
+# Upgrade pip early for security fixes
 RUN pip install --upgrade pip
 
+# Copy dependency metadata first for better layer caching
+COPY pyproject.toml README.md ./
+
+# Copy the rest of the source
 COPY . .
 
 # Install the application and dependencies
-# Assuming pyproject.toml is valid compliant
-RUN pip install .
+RUN pip install --no-cache-dir .
 
-# Install uvicorn explicitly if not picked up (it is in dependencies)
-# RUN pip install uvicorn
+# Create non-root user and drop privileges
+RUN addgroup --system app && adduser --system --ingroup app appuser \
+	&& chown -R appuser:app /app
+USER appuser
 
 # Expose port
 EXPOSE 8000
