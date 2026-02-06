@@ -42,10 +42,16 @@ async def callback_admin_stats(call):
         user_count = await session.scalar(select(func.count(User.id)))
         monitor_count = await session.scalar(select(func.count(Monitor.id)))
         active_monitors = await session.scalar(select(func.count(Monitor.id)).filter(Monitor.is_active == True))
+        
+        # Count users with at least one monitor
+        users_with_monitors = await session.scalar(
+            select(func.count(func.distinct(Monitor.owner_id)))
+        )
 
     text = (
         "📊 **System Statistics**\n\n"
         f"👥 **Total Users:** `{user_count}`\n"
+        f"🙋‍♂️ **Users with Monitors:** `{users_with_monitors}`\n"
         f"📈 **Total Monitors:** `{monitor_count}`\n"
         f"✅ **Active Monitors:** `{active_monitors}`"
     )
