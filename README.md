@@ -58,6 +58,8 @@ Telegram Uptime Monitor is a FastAPI and TeleBot based reliability assistant tha
 | `API_ACCESS_TOKEN` | Secret string clients must supply via `X-API-KEY` header for every REST call. |
 | `DB_ECHO` | Optional (`true`/`false`). Controls SQLAlchemy echo logging; leave `false` in production. |
 
+> Connection strings that start with `postgres://` or `postgresql://` are normalized automatically to `postgresql+asyncpg://`, `sslmode` query parameters (e.g., Neon’s `sslmode=require`) get mapped to `ssl=true` for the asyncpg driver automatically, and unsupported flags such as `channel_binding=require` are stripped. Paste whatever string your managed provider gives you.
+
 > The app loads `.env` explicitly inside `app/config.py`, so local runs should place configuration there. Production deployments can rely on real environment variables instead.
 
 ### Database & Migrations
@@ -101,6 +103,14 @@ docker run -d \
 3. Run `alembic upgrade head` once per release.
 4. Start the app via `uvicorn app.app:app --host 0.0.0.0 --port 8000` or wrap `python main.py` in your supervisor.
 5. Optionally place Nginx/Caddy in front for TLS termination and rate limiting.
+
+#### 3. Render (managed PaaS)
+1. Push the repository to GitHub and create a **Blueprint** on Render that points to it; the provided [render.yaml](render.yaml) provisions both the FastAPI web service and a managed PostgreSQL instance.
+2. During the blueprint review, Render prompts for every secret marked with `sync: false` in the blueprint. Fill in `TELEGRAM_BOT_TOKEN`, `API_ACCESS_TOKEN`, `BOT_USERNAME`, and optional Brevo/admin values.
+3. Deploy the blueprint. Render runs `pip install -U pip && pip install -e .` and starts the app with `python main.py`, which now binds to the `$PORT` Render injects and runs FastAPI, the scheduler, and the Telegram bot together.
+4. After the first deploy, open the **Shell** tab (or fire a one-off job) and run `alembic upgrade head` so the managed PostgreSQL database is migrated.
+5. The `DATABASE_URL` Render injects uses the `postgres://` scheme; thanks to the normalization logic in [app/config.py](app/config.py#L1-L40) it is automatically upgraded to the async `postgresql+asyncpg://` form required by SQLAlchemy.
+6. Leave `DB_ECHO=false` for production and only enable `UVICORN_RELOAD=true` in staging if you really need live reloads.
 
 #### Production Checklist
 - [ ] Rotate `BREVO_API_KEY`/bot tokens regularly and never commit `.env`.

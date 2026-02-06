@@ -1,0 +1,34 @@
+databases:
+  - name: uptime-monitor-db
+    plan: free
+
+services:
+  - type: web
+    name: telegram-uptime-monitor
+    env: python
+    plan: free
+    buildCommand: pip install -U pip && pip install -e .
+    startCommand: python main.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: uptime-monitor-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.12.1
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: API_ACCESS_TOKEN
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: DB_ECHO
+        value: "false"

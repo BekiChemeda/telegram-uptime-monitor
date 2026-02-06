@@ -63,13 +63,28 @@ def run_migrations_online() -> None:
 
     """
     from sqlalchemy.ext.asyncio import create_async_engine
+    from urllib.parse import urlparse, parse_qsl
+
+    db_url = config.get_main_option("sqlalchemy.url")
     
-    # We create an async engine from the database URL
-    # but we need to run migrations synchronously.
-    # We'll use the async engine to get a sync connection
+    # Manually construct connect_args to ensure compatibility with asyncpg,
+    # which does not accept 'sslmode'.
+    # We parse the URL and build a dictionary that create_async_engine understands.
+    parsed_url = urlparse(db_url)
+    connect_args = {}
+    
+    # Translate sslmode=require to ssl=True, which asyncpg expects.
+    query_params = dict(parse_qsl(parsed_url.query))
+    if query_params.get("sslmode") == "require":
+        connect_args["ssl"] = True
+
+    # Rebuild the URL without the query string, as connect_args will handle it.
+    url_for_engine = parsed_url._replace(query="").geturl()
+
     connectable = create_async_engine(
-        config.get_main_option("sqlalchemy.url"),
+        url_for_engine,
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     import asyncio
