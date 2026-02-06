@@ -7,8 +7,8 @@ services:
     name: telegram-uptime-monitor
     env: python
     plan: free
-    buildCommand: pip install -U pip && pip install -e .
-    startCommand: python main.py
+    buildCommand: uv sync --frozen && uv cache prune --ci
+    startCommand: uv run main.py
     healthCheckPath: /health
     autoDeploy: true
     envVars:
