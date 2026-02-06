@@ -297,7 +297,7 @@ async def process_name_step(message):
                 owner_id=user.id,
                 url=url,
                 name=name,
-                interval_seconds=60, 
+                interval_seconds=120, 
                 is_active=True
             )
             session.add(new_monitor)
